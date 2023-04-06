@@ -1,22 +1,30 @@
 #!/usr/bin/env bash
-# A script that displays domain dns informations for a domain
-domaininfo () {
-	answer_section=$(dig "$1" | grep -A1 'ANSWER SECTION' | tail -n 1)
+# script to report information about server domains
+# shellcheck disable=SC2086
+check_domain() {
+	# awk will use record seperator of space
+	# space sperated list of sub domains
+	SUBDOMAINS='www lb-01 web-01 web-02'
 
-	subdomain=$(echo "$answer_section" | awk '{print $1;}' FS=.) 
-	record_type=$(echo "$answer_section" | awk '{print $4;}')
-	ip_address=$(echo "$answer_section" | awk '{print $5}')
-
-	echo "The subdomain $subdomain is a $record_type record and points to $ip_address" 
+	if [ -z "$1" ]; then
+		exit
+	fi
+	# no sub domain specified, do all
+	if [ -z "$2" ]; then
+		echo "$SUBDOMAINS" | awk -v domain="$1"\
+		'BEGIN { RS=" " }
+		{split($0,ARR," ");
+		cmd = "dig " ARR[1]"."domain " | grep -A1 \"ANSWER SECTION:\" | tail -n1";
+		system(cmd)
+		close(cmd)}' | awk\
+		'{
+		split($0, DOMS, ".");
+		print "The subdomain " DOMS[1] " is a " $4 " record and points to " $5}'
+	else
+		dig "$2.$1" | grep -A1 "ANSWER SECTION:" | tail -n1 | awk\
+		'{
+		split($0, DOMS, ".");
+		print "The subdomain " DOMS[1] " is a " $4 " record and points to " $5}'
+	fi
 }
-
-if [ $# -eq 1 ]
-then
-	domaininfo "www.$1" 
-	domaininfo "lb-01.$1"
-	domaininfo "web-01.$1"
-	domaininfo "web-02.$1"
-elif [ $# -eq 2 ]
-then
-	domaininfo "$2.$1"
-fi
+check_domain "$1" "$2"
